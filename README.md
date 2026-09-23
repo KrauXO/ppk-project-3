@@ -1,8 +1,18 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Setup Database PostgreSQL (Neon)
+
+1. Pastikan berkas `.env.local` sudah dibuat (salin dari `.env.example`).
+2. Masukkan URL koneksi database Neon kelompok ke dalam `DATABASE_URL` di `.env.local`.
+3. Jalankan pengujian koneksi database:
+   ```bash
+   npm run test:db
+   ```
+   Jika berhasil, akan muncul pesan `✅ Connection Successful!` berserta versi PostgreSQL.
+
 ## Getting Started
 
-First, run the development server:
+Jalankan server pengembangan:
 
 ```bash
 npm run dev
