@@ -5,16 +5,7 @@
 
 export type TransactionType = 'income' | 'expense';
 
-export interface Transaction {
-  id: string;
-  user_id: string; // Relasi ke User.id (SRS-05 Data Isolation)
-  type: TransactionType; // "income" | "expense"
-  category: string;
-  amount: number;
-  description: string;
-  date: string; // YYYY-MM-DD
-  created_at?: string;
-}
+export type { User, Transaction, FinancialSummary } from '@/lib/dummy-data';
 
 export interface TransactionFormData {
   type: TransactionType;
@@ -25,11 +16,3 @@ export interface TransactionFormData {
 }
 
 export type TransactionModalMode = 'create' | 'edit';
-
-export interface User {
-  id: string;
-  name: string;
-  email: string;
-  password?: string;
-  created_at?: string;
-}

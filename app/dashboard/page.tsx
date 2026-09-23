@@ -1,17 +1,32 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Transaction, TransactionModalMode } from '@/types/transaction';
-import { DUMMY_USERS, INITIAL_TRANSACTIONS } from '@/lib/dummy-data';
+import {
+  DUMMY_USERS,
+  DUMMY_TRANSACTIONS,
+  getTransactionsByUserId,
+  calculateFinancialSummary,
+  User,
+  Transaction,
+} from '@/lib/dummy-data';
+import {
+  useBalanceFormatPreference,
+} from '@/lib/cookie-preference';
+import SummaryCards from '@/components/dashboard/SummaryCards';
+import TransactionTable from '@/components/dashboard/TransactionTable';
 import { TransactionModal, AddTransactionButton, DeleteConfirmModal } from '@/components/transactions';
 import { deleteTransaction } from '@/app/actions/transactions';
+import { TransactionModalMode } from '@/types/transaction';
 
 export default function DashboardPage() {
-  // Current active user (default u1: Alya Putri sesuai Bagian 11)
-  const [currentUser, setCurrentUser] = useState(DUMMY_USERS[0]);
+  // Simulasi User Aktif (default: u1 - Alya Putri sesuai kontrak uji tim)
+  const [activeUser, setActiveUser] = useState<User>(DUMMY_USERS[0]);
 
-  // Transaksi state (diinisialisasi dari dummy data contract Bagian 11)
-  const [transactions, setTransactions] = useState<Transaction[]>(INITIAL_TRANSACTIONS);
+  // Preferensi Format Saldo (SRS-07: tersimpan & sinkron dengan cookie browser)
+  const [formatPreference, handlePreferenceChange] = useBalanceFormatPreference();
+
+  // Transaksi state reaktif (mendukung Tambah, Edit, Hapus dari Dev 3)
+  const [transactions, setTransactions] = useState<Transaction[]>(DUMMY_TRANSACTIONS);
 
   // Modal state untuk Developer 3 (SRS-08 & SRS-09)
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
@@ -26,8 +41,11 @@ export default function DashboardPage() {
   // Toast / feedback state
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Filter transaksi berdasarkan user_id aktif (SRS-05: Data Isolation)
-  const userTransactions = transactions.filter((t) => t.user_id === currentUser.id);
+  // Filter transaksi aktif berdasarkan user_id (SRS-05: Data Isolation)
+  const userTransactions = getTransactionsByUserId(activeUser.id, transactions);
+
+  // Hitung ringkasan keuangan berdasarkan data transaksi user aktif (SRS-04)
+  const summary = calculateFinancialSummary(userTransactions);
 
   // Trigger modal tambah transaksi (SRS-08)
   const handleOpenAddModal = () => {
@@ -54,7 +72,7 @@ export default function DashboardPage() {
     if (!transactionToDelete) return;
     setIsDeleting(true);
     try {
-      const response = await deleteTransaction(transactionToDelete.id, currentUser.id);
+      const response = await deleteTransaction(transactionToDelete.id, activeUser.id);
       if (!response.success) {
         throw new Error(response.error || 'Gagal menghapus transaksi.');
       }
@@ -87,55 +105,59 @@ export default function DashboardPage() {
     }, 3500);
   };
 
-  // Format currency helper sederhana untuk tampilan Rupiah
-  const formatRupiah = (val: number) => {
-    return 'Rp ' + val.toLocaleString('id-ID');
-  };
-
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] font-sans">
-      {/* Top Navbar Sederhana (Bagian 5: Layout) */}
-      <header className="bg-[#FFFFFF] border-b border-[#E2E8F0] px-6 py-3.5">
-        <div className="max-w-5xl mx-auto flex items-center justify-between">
+    <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A]">
+      {/* Top Navbar Sederhana (Shared / Dev 1 Slot) */}
+      <header className="bg-white border-b border-[#E2E8F0] sticky top-0 z-10">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <span className="text-xl font-semibold tracking-tight text-[#0F172A]">DUITku</span>
-            <span className="text-xs px-2 py-0.5 rounded-[6px] bg-[#E2E8F0] text-[#64748B] font-medium">
-              Expense Tracker
-            </span>
+            <div className="w-8 h-8 rounded-[6px] bg-[#2563EB] flex items-center justify-center text-white font-bold text-base">
+              D
+            </div>
+            <div>
+              <h1 className="text-lg font-semibold text-[#0F172A] leading-tight">
+                DUITku
+              </h1>
+              <p className="text-[11px] text-[#64748B]">Expense Tracker Mahasiswa</p>
+            </div>
           </div>
 
-          {/* Switch User Dummy untuk Uji SRS-05 Data Isolation & Empty State */}
+          {/* Area Info Pengguna & Pengujian User Switcher (SRS-05) */}
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 text-sm text-[#64748B]">
-              <span>Uji Akun:</span>
+            <div className="text-right hidden sm:block">
+              <p className="text-xs font-semibold text-[#0F172A]">{activeUser.name}</p>
+              <p className="text-[11px] text-[#64748B]">{activeUser.email}</p>
+            </div>
+
+            {/* Selector User untuk Pengujian Isolasi Data (SRS-05 & Empty State SRS-03) */}
+            <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-[6px] border border-[#E2E8F0]">
+              <span className="text-[11px] font-medium text-[#64748B] px-1 hidden md:inline">
+                User Uji:
+              </span>
               <select
-                value={currentUser.id}
+                value={activeUser.id}
                 onChange={(e) => {
-                  const found = DUMMY_USERS.find((u) => u.id === e.target.value);
-                  if (found) setCurrentUser(found);
+                  const selected = DUMMY_USERS.find((u) => u.id === e.target.value);
+                  if (selected) setActiveUser(selected);
                 }}
-                className="px-2.5 py-1 text-sm rounded-[6px] border border-[#E2E8F0] bg-[#FFFFFF] text-[#0F172A] focus:outline-none focus:border-[#2563EB]"
+                className="text-xs bg-white border border-[#E2E8F0] rounded-[4px] px-2 py-1 text-[#0F172A] font-medium focus:outline-none"
+                title="Ganti user untuk menguji isolasi data transaksi"
               >
-                {DUMMY_USERS.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.name} ({u.id === 'u3' ? 'Empty State' : u.id})
-                  </option>
-                ))}
+                <option value="u1">u1 - Alya (Data Normal)</option>
+                <option value="u2">u2 - Bima (Data Terisolasi)</option>
+                <option value="u3">u3 - Citra (Empty State)</option>
               </select>
             </div>
-            <span className="text-xs text-[#64748B] border-l border-[#E2E8F0] pl-3">
-              {currentUser.email}
-            </span>
           </div>
         </div>
       </header>
 
-      {/* Main Container */}
-      <main className="max-w-5xl mx-auto px-6 py-8">
+      {/* Main Content Area */}
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
         {/* Toast Alert Sukses */}
         {toastMessage && (
           <div
-            className="mb-6 p-3 rounded-[6px] bg-green-50 border border-[#16A34A]/20 text-[#16A34A] text-sm flex items-center justify-between"
+            className="p-3 rounded-[6px] bg-green-50 border border-[#16A34A]/20 text-[#16A34A] text-sm flex items-center justify-between"
             role="status"
           >
             <div className="flex items-center gap-2">
@@ -146,113 +168,46 @@ export default function DashboardPage() {
             </div>
             <button
               onClick={() => setToastMessage(null)}
-              className="text-[#16A34A] hover:opacity-75 text-xs font-semibold ml-4"
+              className="text-[#16A34A] hover:opacity-75 text-xs font-semibold ml-4 cursor-pointer"
             >
               ✕
             </button>
           </div>
         )}
 
-        {/* Header Action Section (Scope Dev 3: Tombol Tambah Transaksi) */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        {/* 1. Ringkasan Keuangan (SRS-04) & Cookie Format Preferensi (SRS-07) */}
+        <section aria-label="Ringkasan Keuangan">
+          <SummaryCards
+            summary={summary}
+            formatPreference={formatPreference}
+            onPreferenceChange={handlePreferenceChange}
+          />
+        </section>
+
+        {/* Baris Tindakan & Slot Dev 3 (Tambah Transaksi) */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-2">
           <div>
-            <h1 className="text-2xl font-semibold text-[#0F172A]">Daftar Transaksi</h1>
-            <p className="text-sm text-[#64748B] mt-0.5">
-              Kelola pencatatan pengeluaran dan pemasukan keuangan mahasiswa ({currentUser.name})
+            <h2 className="text-xl font-semibold text-[#0F172A]">Daftar Transaksi</h2>
+            <p className="text-xs text-[#64748B]">
+              Menampilkan data transaksi keuangan milik {activeUser.name}
             </p>
           </div>
 
-          {/* Trigger Tambah Transaksi — Komponen Developer 3 */}
-          <div>
+          {/* Slot Integrasi untuk Developer 3 (SRS-08 Tambah Transaksi) */}
+          <div id="dev3-add-transaction-slot" className="flex items-center gap-2">
             <AddTransactionButton onClick={handleOpenAddModal} />
           </div>
         </div>
 
-        {/* Tabel Riwayat Transaksi (Menampilkan data dan tombol trigger aksi Edit & Hapus) */}
-        <div className="bg-[#FFFFFF] border border-[#E2E8F0] rounded-[6px] overflow-hidden shadow-none">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-[#F8FAFC] border-b border-[#E2E8F0] text-xs font-medium text-[#64748B]">
-                <tr>
-                  <th scope="col" className="px-4 py-3">Tanggal</th>
-                  <th scope="col" className="px-4 py-3">Jenis</th>
-                  <th scope="col" className="px-4 py-3">Kategori</th>
-                  <th scope="col" className="px-4 py-3">Deskripsi</th>
-                  <th scope="col" className="px-4 py-3 text-right">Nominal</th>
-                  <th scope="col" className="px-4 py-3 text-center">Aksi</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#E2E8F0]">
-                {userTransactions.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="px-4 py-12 text-center text-[#64748B]">
-                      <div className="max-w-xs mx-auto space-y-2">
-                        <p className="font-medium text-[#0F172A]">Belum ada transaksi</p>
-                        <p className="text-xs">
-                          Mulai mencatat transaksi keuangan pertama Anda dengan menekan tombol Tambah Transaksi di atas.
-                        </p>
-                      </div>
-                    </td>
-                  </tr>
-                ) : (
-                  userTransactions.map((tx) => (
-                    <tr key={tx.id} className="hover:bg-[#F8FAFC] transition-colors">
-                      <td className="px-4 py-3 whitespace-nowrap text-[#64748B]">
-                        {tx.date}
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <span
-                          className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full ${
-                            tx.type === 'income'
-                              ? 'bg-green-50 text-[#16A34A] border border-[#16A34A]/20'
-                              : 'bg-red-50 text-[#DC2626] border border-[#DC2626]/20'
-                          }`}
-                        >
-                          {tx.type === 'income' ? 'Pemasukan' : 'Pengeluaran'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 font-medium text-[#0F172A] whitespace-nowrap">
-                        {tx.category}
-                      </td>
-                      <td className="px-4 py-3 text-[#64748B] max-w-sm">
-                        <span className="line-clamp-2" title={tx.description}>
-                          {tx.description || '-'}
-                        </span>
-                      </td>
-                      <td
-                        className={`px-4 py-3 text-right font-medium whitespace-nowrap ${
-                          tx.type === 'income' ? 'text-[#16A34A]' : 'text-[#DC2626]'
-                        }`}
-                      >
-                        {tx.type === 'income' ? '+' : '-'} {formatRupiah(tx.amount)}
-                      </td>
-                      <td className="px-4 py-3 text-center whitespace-nowrap">
-                        <div className="flex items-center justify-center gap-1.5">
-                          {/* Trigger Edit Transaksi (SRS-09) */}
-                          <button
-                            type="button"
-                            onClick={() => handleOpenEditModal(tx)}
-                            className="px-2.5 py-1 text-xs font-medium rounded-[6px] border border-[#E2E8F0] bg-[#FFFFFF] text-[#0F172A] hover:bg-[#F8FAFC] hover:border-[#2563EB] hover:text-[#2563EB] transition-colors cursor-pointer"
-                          >
-                            Edit
-                          </button>
-                          {/* Trigger Hapus Transaksi (SRS-10) */}
-                          <button
-                            type="button"
-                            onClick={() => handleOpenDeleteModal(tx)}
-                            className="px-2.5 py-1 text-xs font-medium rounded-[6px] border border-[#E2E8F0] bg-[#FFFFFF] text-[#DC2626] hover:bg-red-50 hover:border-[#DC2626] transition-colors cursor-pointer"
-                          >
-                            Hapus
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        {/* 2. Tabel Riwayat Transaksi (SRS-03, SRS-05, SRS-09 Edit, SRS-10 Hapus) */}
+        <section aria-label="Tabel Riwayat Transaksi">
+          <TransactionTable
+            transactions={userTransactions}
+            formatPreference={formatPreference}
+            onEdit={handleOpenEditModal}
+            onDelete={handleOpenDeleteModal}
+          />
+        </section>
       </main>
 
       {/* Modal Form Transaksi Terpadu (SRS-08 & SRS-09) */}
@@ -260,7 +215,7 @@ export default function DashboardPage() {
         isOpen={isModalOpen}
         mode={modalMode}
         initialData={selectedTransaction}
-        userId={currentUser.id}
+        userId={activeUser.id}
         onClose={() => setIsModalOpen(false)}
         onSuccess={handleModalSuccess}
       />
