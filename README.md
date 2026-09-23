@@ -1,46 +1,92 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# DUITku — Expense Tracker
 
-## Setup Database PostgreSQL (Neon)
+Aplikasi web sederhana untuk membantu mahasiswa mencatat pemasukan, pengeluaran, dan memantau kondisi keuangan pribadinya. Pengguna dapat menambahkan, mengubah, menghapus, dan melihat transaksi keuangannya melalui dashboard.
 
-1. Pastikan berkas `.env.local` sudah dibuat (salin dari `.env.example`).
-2. Masukkan URL koneksi database Neon kelompok ke dalam `DATABASE_URL` di `.env.local`.
-3. Jalankan pengujian koneksi database:
-   ```bash
-   npm run test:db
-   ```
-   Jika berhasil, akan muncul pesan `✅ Connection Successful!` berserta versi PostgreSQL.
+---
 
-## Getting Started
+## Daftar Isi
 
-Jalankan server pengembangan:
+- [Tentang Project](#tentang-project)
+- [SRS (Software Requirement Specification)](#srs-software-requirement-specification)
+- [Role & Tim](#role--tim)
+- [Struktur Pembagian Developer](#struktur-pembagian-developer)
+- [Cara Menjalankan Project](#cara-menjalankan-project)
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+---
+
+## Tentang Project
+
+**DUITku** memungkinkan pengguna (mahasiswa) untuk:
+- Membuat akun & login
+- Mencatat transaksi keuangan (pemasukan/pengeluaran)
+- Melihat riwayat transaksi
+- Memantau saldo, total pemasukan, dan total pengeluaran secara real-time
+
+Scope dikerjakan **ketat sesuai SRS** — tidak ada fitur tambahan di luar requirement.
+
+---
+
+## SRS (Software Requirement Specification)
+
+| Kode | Requirement |
+|---|---|
+| `SRS-01` | Pengguna dapat membuat akun |
+| `SRS-02` | Pengguna dapat masuk (login) ke aplikasi |
+| `SRS-03` | Pengguna dapat melihat transaksi & riwayat transaksi |
+| `SRS-04` | Pengguna dapat mengetahui kondisi keuangan melalui saldo, total pemasukan, dan total pengeluaran |
+| `SRS-05` | Data transaksi terhubung dengan pengguna yang login — setiap pengguna hanya dapat mengakses & mengelola data miliknya sendiri |
+| `SRS-06` | Aplikasi mempertahankan informasi login pengguna selama session masih berlaku |
+| `SRS-07` | Aplikasi menggunakan cookies untuk menyimpan minimal satu preferensi pengguna — **ditetapkan: format tampilan saldo (Rupiah)** |
+| `SRS-08` | Pengguna dapat menambahkan transaksi keuangan |
+| `SRS-09` | Pengguna dapat mengubah transaksi keuangan |
+| `SRS-10` | Pengguna dapat menghapus transaksi keuangan |
+
+> **Catatan:** `SRS-06` (session) dan `SRS-07` (cookie) adalah dua mekanisme berbeda — session menjaga status login, cookie hanya menyimpan 1 preferensi tampilan. Tidak digabung.
+
+### Halaman
+
+| Halaman | Role | Requirement |
+|---|---|---|
+| Login | Guest | `SRS-02` |
+| Register | Guest | `SRS-01` |
+| Dashboard | User | `SRS-03` `SRS-04` `SRS-05` `SRS-06` `SRS-07` `SRS-08` `SRS-09` `SRS-10` |
+
+---
+
+## Role & Tim
+
+| Role | Tanggung Jawab |
+|---|---|
+| **Project Manager (PM) : Saburo Rafqi Hidayat** | Memecah SRS, membagi tugas, inisialisasi repo, atur workflow, handle merge conflict, integrasi ke `main` |
+| **Developer 1 : Raffie Aditya Akbar** | Auth & Session — Register, Login, Logout, Session persistence (`SRS-01, 02, 06`) |
+| **Developer 2 : Shalom Kurniawan** | Ringkasan, Riwayat, Hapus & Preferensi Tampilan — Summary saldo, list transaksi, cookie format saldo (`SRS-03, 04, 07`) |
+| **Developer 3 : Reynaldi Bertinus Hutagaol** | Form Transaksi — Tambah, hapus transaksi & Edit transaksi (modal form yang sama) (`SRS-08, 09, 10`) |
+
+Fondasi bersama (design system, shared component, session middleware, pola query `user_id` untuk data isolation) dikerjakan di awal sebelum ketiga developer masuk ke scope masing-masing.
+
+---
+
+## Struktur Pembagian Developer
+
+```
+main
+├── feature/developer-1   (auth, session)
+├── feature/developer-2   (dashboard summary, list, cookie preferensi)
+└── feature/developer-3   (form tambah, hapus & edit transaksi)
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Cara Menjalankan Project
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+# Clone repo
+git clone <repo-url>
+cd duitku
 
-## Learn More
+# Install dependency
+npm install
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+# Jalankan project
+npm run dev
+```
