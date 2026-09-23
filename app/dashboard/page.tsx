@@ -43,6 +43,8 @@ export default function DashboardPage() {
 
   // Filter transaksi aktif berdasarkan user_id (SRS-05: Data Isolation)
   const userTransactions = getTransactionsByUserId(activeUser.id, transactions);
+  // Filter transaksi aktif berdasarkan user_id (SRS-05: Data Isolation)
+  const userTransactions = getTransactionsByUserId(activeUser.id, DUMMY_TRANSACTIONS);
 
   // Hitung ringkasan keuangan berdasarkan data transaksi user aktif (SRS-04)
   const summary = calculateFinancialSummary(userTransactions);
@@ -174,6 +176,15 @@ export default function DashboardPage() {
             </button>
           </div>
         )}
+        {/* Banner Penjelasan Scope Dev 2 */}
+        <div className="bg-blue-50/70 border border-blue-200/80 rounded-[6px] p-3 text-xs text-blue-900 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <span className="font-semibold">Scope Developer 2 Aktif:</span> Menampilkan ringkasan kondisi keuangan (SRS-04), riwayat transaksi (SRS-03), isolasi data (SRS-05), dan cookie preferensi format saldo (SRS-07).
+          </div>
+          <div className="text-[11px] text-blue-700 bg-white/80 px-2 py-0.5 rounded border border-blue-200 self-start sm:self-auto">
+            User Aktif: <span className="font-semibold">{activeUser.name} ({activeUser.id})</span>
+          </div>
+        </div>
 
         {/* 1. Ringkasan Keuangan (SRS-04) & Cookie Format Preferensi (SRS-07) */}
         <section aria-label="Ringkasan Keuangan">
@@ -200,6 +211,14 @@ export default function DashboardPage() {
         </div>
 
         {/* 2. Tabel Riwayat Transaksi (SRS-03, SRS-05, SRS-09 Edit, SRS-10 Hapus) */}
+            {/* Developer 3 akan menaruh tombol trigger 'Tambah Transaksi' di sini */}
+            <div className="text-xs text-[#64748B] border border-dashed border-[#E2E8F0] px-3 py-1.5 rounded-[6px] bg-white">
+              [Slot Tombol Tambah Transaksi - Dev 3]
+            </div>
+          </div>
+        </div>
+
+        {/* 2. Tabel Riwayat Transaksi (SRS-03, SRS-05) */}
         <section aria-label="Tabel Riwayat Transaksi">
           <TransactionTable
             transactions={userTransactions}
@@ -233,6 +252,9 @@ export default function DashboardPage() {
         }}
         onConfirm={handleConfirmDelete}
       />
+          />
+        </section>
+      </main>
     </div>
   );
 }
