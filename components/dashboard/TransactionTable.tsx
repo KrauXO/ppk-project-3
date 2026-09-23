@@ -7,11 +7,15 @@ import { BalanceFormatPreference, formatCurrency } from '@/lib/cookie-preference
 interface TransactionTableProps {
   transactions: Transaction[];
   formatPreference: BalanceFormatPreference;
+  onEdit?: (transaction: Transaction) => void;
+  onDelete?: (transaction: Transaction) => void;
 }
 
 export default function TransactionTable({
   transactions,
   formatPreference,
+  onEdit,
+  onDelete,
 }: TransactionTableProps) {
   // Format tanggal ramah pengguna (contoh: 01 Feb 2025)
   const formatDate = (dateString: string) => {
@@ -26,6 +30,8 @@ export default function TransactionTable({
       return dateString;
     }
   };
+
+  const hasActions = Boolean(onEdit || onDelete);
 
   return (
     <div className="bg-white border border-[#E2E8F0] rounded-[6px] overflow-hidden shadow-xs">
@@ -78,6 +84,7 @@ export default function TransactionTable({
                 <th scope="col" className="px-4 py-3 min-w-[200px]">Deskripsi</th>
                 <th scope="col" className="px-4 py-3">Tipe</th>
                 <th scope="col" className="px-4 py-3 text-right">Nominal</th>
+                {hasActions && <th scope="col" className="px-4 py-3 text-center">Aksi</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-[#E2E8F0]">
@@ -112,6 +119,30 @@ export default function TransactionTable({
                     >
                       {isIncome ? '+' : '-'}{formatCurrency(t.amount, formatPreference)}
                     </td>
+                    {hasActions && (
+                      <td className="px-4 py-3 text-center whitespace-nowrap">
+                        <div className="flex items-center justify-center gap-1.5">
+                          {onEdit && (
+                            <button
+                              type="button"
+                              onClick={() => onEdit(t)}
+                              className="px-2.5 py-1 text-xs font-medium rounded-[6px] border border-[#E2E8F0] bg-[#FFFFFF] text-[#0F172A] hover:bg-[#F8FAFC] hover:border-[#2563EB] hover:text-[#2563EB] transition-colors cursor-pointer"
+                            >
+                              Edit
+                            </button>
+                          )}
+                          {onDelete && (
+                            <button
+                              type="button"
+                              onClick={() => onDelete(t)}
+                              className="px-2.5 py-1 text-xs font-medium rounded-[6px] border border-[#E2E8F0] bg-[#FFFFFF] text-[#DC2626] hover:bg-red-50 hover:border-[#DC2626] transition-colors cursor-pointer"
+                            >
+                              Hapus
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 );
               })}

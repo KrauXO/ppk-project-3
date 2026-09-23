@@ -7,12 +7,16 @@ import {
   getTransactionsByUserId,
   calculateFinancialSummary,
   User,
+  Transaction,
 } from '@/lib/dummy-data';
 import {
   useBalanceFormatPreference,
 } from '@/lib/cookie-preference';
 import SummaryCards from '@/components/dashboard/SummaryCards';
 import TransactionTable from '@/components/dashboard/TransactionTable';
+import { TransactionModal, AddTransactionButton, DeleteConfirmModal } from '@/components/transactions';
+import { deleteTransaction } from '@/app/actions/transactions';
+import { TransactionModalMode } from '@/types/transaction';
 
 export default function DashboardPage() {
   // Simulasi User Aktif (default: u1 - Alya Putri sesuai kontrak uji tim)
@@ -21,11 +25,87 @@ export default function DashboardPage() {
   // Preferensi Format Saldo (SRS-07: tersimpan & sinkron dengan cookie browser)
   const [formatPreference, handlePreferenceChange] = useBalanceFormatPreference();
 
+  // Transaksi state reaktif (mendukung Tambah, Edit, Hapus dari Dev 3)
+  const [transactions, setTransactions] = useState<Transaction[]>(DUMMY_TRANSACTIONS);
+
+  // Modal state untuk Developer 3 (SRS-08 & SRS-09)
+  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  const [modalMode, setModalMode] = useState<TransactionModalMode>('create');
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+
+  // Modal state konfirmasi hapus (SRS-10)
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState<boolean>(false);
+  const [transactionToDelete, setTransactionToDelete] = useState<Transaction | null>(null);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
+
+  // Toast / feedback state
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Filter transaksi aktif berdasarkan user_id (SRS-05: Data Isolation)
+  const userTransactions = getTransactionsByUserId(activeUser.id, transactions);
   // Filter transaksi aktif berdasarkan user_id (SRS-05: Data Isolation)
   const userTransactions = getTransactionsByUserId(activeUser.id, DUMMY_TRANSACTIONS);
 
   // Hitung ringkasan keuangan berdasarkan data transaksi user aktif (SRS-04)
   const summary = calculateFinancialSummary(userTransactions);
+
+  // Trigger modal tambah transaksi (SRS-08)
+  const handleOpenAddModal = () => {
+    setModalMode('create');
+    setSelectedTransaction(null);
+    setIsModalOpen(true);
+  };
+
+  // Trigger modal edit transaksi (SRS-09)
+  const handleOpenEditModal = (tx: Transaction) => {
+    setModalMode('edit');
+    setSelectedTransaction(tx);
+    setIsModalOpen(true);
+  };
+
+  // Trigger modal konfirmasi hapus transaksi (SRS-10)
+  const handleOpenDeleteModal = (tx: Transaction) => {
+    setTransactionToDelete(tx);
+    setIsDeleteModalOpen(true);
+  };
+
+  // Eksekusi hapus transaksi (SRS-10)
+  const handleConfirmDelete = async () => {
+    if (!transactionToDelete) return;
+    setIsDeleting(true);
+    try {
+      const response = await deleteTransaction(transactionToDelete.id, activeUser.id);
+      if (!response.success) {
+        throw new Error(response.error || 'Gagal menghapus transaksi.');
+      }
+      setTransactions((prev) => prev.filter((t) => t.id !== transactionToDelete.id));
+      setToastMessage(response.message || 'Transaksi berhasil dihapus.');
+      setIsDeleteModalOpen(false);
+      setTransactionToDelete(null);
+      setTimeout(() => {
+        setToastMessage(null);
+      }, 3500);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Terjadi kesalahan saat menghapus transaksi.';
+      setToastMessage(msg);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // Callback sukses dari TransactionModal (Tambah / Edit)
+  const handleModalSuccess = (savedTx: Transaction, message: string) => {
+    if (modalMode === 'create') {
+      setTransactions((prev) => [savedTx, ...prev]);
+    } else {
+      setTransactions((prev) => prev.map((t) => (t.id === savedTx.id ? savedTx : t)));
+    }
+
+    setToastMessage(message);
+    setTimeout(() => {
+      setToastMessage(null);
+    }, 3500);
+  };
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A]">
@@ -76,6 +156,26 @@ export default function DashboardPage() {
 
       {/* Main Content Area */}
       <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+        {/* Toast Alert Sukses */}
+        {toastMessage && (
+          <div
+            className="p-3 rounded-[6px] bg-green-50 border border-[#16A34A]/20 text-[#16A34A] text-sm flex items-center justify-between"
+            role="status"
+          >
+            <div className="flex items-center gap-2">
+              <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+              </svg>
+              <span>{toastMessage}</span>
+            </div>
+            <button
+              onClick={() => setToastMessage(null)}
+              className="text-[#16A34A] hover:opacity-75 text-xs font-semibold ml-4 cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+        )}
         {/* Banner Penjelasan Scope Dev 2 */}
         <div className="bg-blue-50/70 border border-blue-200/80 rounded-[6px] p-3 text-xs text-blue-900 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
@@ -106,6 +206,11 @@ export default function DashboardPage() {
 
           {/* Slot Integrasi untuk Developer 3 (SRS-08 Tambah Transaksi) */}
           <div id="dev3-add-transaction-slot" className="flex items-center gap-2">
+            <AddTransactionButton onClick={handleOpenAddModal} />
+          </div>
+        </div>
+
+        {/* 2. Tabel Riwayat Transaksi (SRS-03, SRS-05, SRS-09 Edit, SRS-10 Hapus) */}
             {/* Developer 3 akan menaruh tombol trigger 'Tambah Transaksi' di sini */}
             <div className="text-xs text-[#64748B] border border-dashed border-[#E2E8F0] px-3 py-1.5 rounded-[6px] bg-white">
               [Slot Tombol Tambah Transaksi - Dev 3]
@@ -118,6 +223,35 @@ export default function DashboardPage() {
           <TransactionTable
             transactions={userTransactions}
             formatPreference={formatPreference}
+            onEdit={handleOpenEditModal}
+            onDelete={handleOpenDeleteModal}
+          />
+        </section>
+      </main>
+
+      {/* Modal Form Transaksi Terpadu (SRS-08 & SRS-09) */}
+      <TransactionModal
+        isOpen={isModalOpen}
+        mode={modalMode}
+        initialData={selectedTransaction}
+        userId={activeUser.id}
+        onClose={() => setIsModalOpen(false)}
+        onSuccess={handleModalSuccess}
+      />
+
+      {/* Modal Konfirmasi Hapus Transaksi (SRS-10) */}
+      <DeleteConfirmModal
+        isOpen={isDeleteModalOpen}
+        transaction={transactionToDelete}
+        isLoading={isDeleting}
+        onClose={() => {
+          if (!isDeleting) {
+            setIsDeleteModalOpen(false);
+            setTransactionToDelete(null);
+          }
+        }}
+        onConfirm={handleConfirmDelete}
+      />
           />
         </section>
       </main>

@@ -121,6 +121,9 @@ export const DUMMY_TRANSACTIONS: Transaction[] = [
   },
 ];
 
+// Alias untuk kompatibilitas lintas branch/modul
+export const INITIAL_TRANSACTIONS = DUMMY_TRANSACTIONS;
+
 /**
  * Filter transaksi berdasarkan user_id (SRS-05)
  */
