@@ -57,10 +57,10 @@ Scope dikerjakan **ketat sesuai SRS** — tidak ada fitur tambahan di luar requi
 
 | Role | Tanggung Jawab |
 |---|---|
-| **Project Manager (PM)** | Memecah SRS, membagi tugas, inisialisasi repo, atur workflow, handle merge conflict, integrasi ke `main` |
-| **Developer 1** | Auth & Session — Register, Login, Logout, Session persistence (`SRS-01, 02, 06`) |
-| **Developer 2** | Ringkasan, Riwayat, Hapus & Preferensi Tampilan — Summary saldo, list transaksi, hapus transaksi, cookie format saldo (`SRS-03, 04, 07`) |
-| **Developer 3** | Form Transaksi — Tambah & Edit transaksi (modal form yang sama) (`SRS-08, 09, 10`) |
+| **Project Manager (PM) : Saburo Rafqi Hidayat** | Memecah SRS, membagi tugas, inisialisasi repo, atur workflow, handle merge conflict, integrasi ke `main` |
+| **Developer 1 : Raffie Aditya Akbar** | Auth & Session — Register, Login, Logout, Session persistence (`SRS-01, 02, 06`) |
+| **Developer 2 : Shalom Kurniawan** | Ringkasan, Riwayat, Hapus & Preferensi Tampilan — Summary saldo, list transaksi, cookie format saldo (`SRS-03, 04, 07`) |
+| **Developer 3 : Reynaldi Bertinus Hutagaol** | Form Transaksi — Tambah, hapus transaksi & Edit transaksi (modal form yang sama) (`SRS-08, 09, 10`) |
 
 Fondasi bersama (design system, shared component, session middleware, pola query `user_id` untuk data isolation) dikerjakan di awal sebelum ketiga developer masuk ke scope masing-masing.
 
