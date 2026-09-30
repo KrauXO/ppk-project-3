@@ -1,5 +1,5 @@
 import { cookies } from 'next/headers';
-import { createUser, getUserByEmail, getUserById, User } from './users';
+import { createUser, getUserByEmail } from './users';
 import {
   createSessionToken,
   SESSION_COOKIE_NAME,

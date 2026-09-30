@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   DUMMY_USERS,
@@ -17,9 +18,10 @@ import {
 } from '@/lib/cookie-preference';
 import SummaryCards from '@/components/dashboard/SummaryCards';
 import TransactionTable from '@/components/dashboard/TransactionTable';
-import { TransactionModal, AddTransactionButton, DeleteConfirmModal } from '@/components/transactions';
+import TransactionFilter, { FilterState } from '@/components/dashboard/TransactionFilter';
+import { TransactionModal, DeleteConfirmModal } from '@/components/transactions';
 import { BudgetMonitorCard, BudgetModal } from '@/components/budget';
-import { deleteTransaction, getTransactions } from '@/app/actions/transactions';
+import { deleteTransaction } from '@/app/actions/transactions';
 import { TransactionModalMode } from '@/types/transaction';
 
 export default function DashboardPage() {
@@ -34,21 +36,37 @@ export default function DashboardPage() {
   // Preferensi Format Saldo (SRS-07: tersimpan & sinkron dengan cookie browser)
   const [formatPreference, handlePreferenceChange] = useBalanceFormatPreference();
 
-  // Transaksi state reaktif (mendukung Tambah, Edit, Hapus dari Dev 3)
-  const [transactions, setTransactions] = useState<Transaction[]>(DUMMY_TRANSACTIONS);
+  // Filter transaksi aktif via AJAX (SRS-11)
+  const [filter, setFilter] = useState<FilterState>({
+    month: 'all',
+    type: 'all',
+    category: 'all',
+  });
+  const [allUserTransactions, setAllUserTransactions] = useState<Transaction[]>(() =>
+    getTransactionsByUserId(DUMMY_USERS[0].id, DUMMY_TRANSACTIONS)
+  );
+  const [transactions, setTransactions] = useState<Transaction[]>(() =>
+    getTransactionsByUserId(DUMMY_USERS[0].id, DUMMY_TRANSACTIONS)
+  );
+  const [isFilterLoading, setIsFilterLoading] = useState<boolean>(false);
 
   // State Budget Bulanan (SRS-12, SRS-13, SRS-14)
   const [budgets, setBudgets] = useState<MonthlyBudget[]>(DUMMY_BUDGETS);
   const [selectedMonth, setSelectedMonth] = useState<string>('2025-02');
   const [isBudgetModalOpen, setIsBudgetModalOpen] = useState<boolean>(false);
 
-  // Sinkronisasi session login (Dev 1) & data transaksi dari DB/server
+  // Sinkronisasi session login (Dev 1)
   useEffect(() => {
     fetch('/api/auth/me')
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (data?.user) {
-          const loggedIn: User = {
+          const match = DUMMY_USERS.find(
+            (u) =>
+              u.id === data.user.id ||
+              u.email.toLowerCase() === data.user.email.toLowerCase()
+          );
+          const loggedIn: User = match || {
             id: data.user.id,
             name: data.user.name,
             email: data.user.email,
@@ -61,13 +79,55 @@ export default function DashboardPage() {
         }
       })
       .catch(() => {});
-
-    getTransactions()
-      .then((list) => {
-        if (list) setTransactions(list);
-      })
-      .catch(() => {});
   }, []);
+
+  // Fungsi pemuat transaksi via AJAX Route Handler /api/transactions (SRS-11)
+  const fetchTransactionsAjax = useCallback(
+    async (userId: string, currentFilter: FilterState) => {
+      setIsFilterLoading(true);
+      try {
+        const filteredParams = new URLSearchParams({
+          userId,
+          month: currentFilter.month,
+          type: currentFilter.type,
+          category: currentFilter.category,
+        });
+        const allParams = new URLSearchParams({
+          userId,
+          month: 'all',
+          type: 'all',
+          category: 'all',
+        });
+
+        const [filteredRes, allRes] = await Promise.all([
+          fetch(`/api/transactions?${filteredParams.toString()}`),
+          fetch(`/api/transactions?${allParams.toString()}`),
+        ]);
+
+        if (filteredRes.ok) {
+          const filteredData = await filteredRes.json();
+          if (Array.isArray(filteredData.transactions)) {
+            setTransactions(filteredData.transactions);
+          }
+        }
+        if (allRes.ok) {
+          const allData = await allRes.json();
+          if (Array.isArray(allData.transactions)) {
+            setAllUserTransactions(allData.transactions);
+          }
+        }
+      } catch (err) {
+        console.error('AJAX transactions fetch error:', err);
+      } finally {
+        setIsFilterLoading(false);
+      }
+    },
+    []
+  );
+
+  useEffect(() => {
+    fetchTransactionsAjax(activeUser.id, filter);
+  }, [activeUser.id, filter, fetchTransactionsAjax]);
 
   // Sinkronisasi data budget user aktif via AJAX GET /api/budgets (SRS-11, SRS-14)
   useEffect(() => {
@@ -83,6 +143,14 @@ export default function DashboardPage() {
       })
       .catch(() => {});
   }, [activeUser.id]);
+
+  const handleFilterChange = (newFilter: FilterState) => {
+    setFilter(newFilter);
+  };
+
+  const handleResetFilter = () => {
+    setFilter({ month: 'all', type: 'all', category: 'all' });
+  };
 
   const handleLogout = async () => {
     setIsLoggingOut(true);
@@ -108,11 +176,8 @@ export default function DashboardPage() {
   // Toast / feedback state
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Filter transaksi aktif berdasarkan user_id (SRS-05: Data Isolation)
-  const userTransactions = getTransactionsByUserId(activeUser.id, transactions);
-
-  // Hitung ringkasan keuangan berdasarkan data transaksi user aktif (SRS-04)
-  const summary = calculateFinancialSummary(userTransactions);
+  // Hitung ringkasan keuangan berdasarkan seluruh data transaksi user aktif (SRS-04)
+  const summary = calculateFinancialSummary(allUserTransactions);
 
   // Cari budget aktif untuk user & bulan terpilih (SRS-13, SRS-14)
   const activeBudget =
@@ -138,17 +203,38 @@ export default function DashboardPage() {
     setIsDeleteModalOpen(true);
   };
 
-  // Eksekusi hapus transaksi (SRS-10)
+  // Eksekusi hapus transaksi via AJAX DELETE /api/transactions/[id] (SRS-10, SRS-11)
   const handleConfirmDelete = async () => {
     if (!transactionToDelete) return;
     setIsDeleting(true);
     try {
-      const response = await deleteTransaction(transactionToDelete.id, activeUser.id);
-      if (!response.success) {
-        throw new Error(response.error || 'Gagal menghapus transaksi.');
+      let deleted = false;
+      let msg = 'Transaksi berhasil dihapus.';
+
+      try {
+        const res = await fetch(
+          `/api/transactions/${encodeURIComponent(transactionToDelete.id)}?userId=${encodeURIComponent(activeUser.id)}`,
+          { method: 'DELETE' }
+        );
+        if (res.ok) {
+          const data = await res.json();
+          deleted = true;
+          if (data.message) msg = data.message;
+        }
+      } catch {
+        // Fallback ke server action
       }
-      setTransactions((prev) => prev.filter((t) => t.id !== transactionToDelete.id));
-      setToastMessage(response.message || 'Transaksi berhasil dihapus.');
+
+      if (!deleted) {
+        const response = await deleteTransaction(transactionToDelete.id, activeUser.id);
+        if (!response.success) {
+          throw new Error(response.error || 'Gagal menghapus transaksi.');
+        }
+        if (response.message) msg = response.message;
+      }
+
+      await fetchTransactionsAjax(activeUser.id, filter);
+      setToastMessage(msg);
       setIsDeleteModalOpen(false);
       setTransactionToDelete(null);
       setTimeout(() => {
@@ -163,13 +249,8 @@ export default function DashboardPage() {
   };
 
   // Callback sukses dari TransactionModal (Tambah / Edit)
-  const handleModalSuccess = (savedTx: Transaction, message: string) => {
-    if (modalMode === 'create') {
-      setTransactions((prev) => [savedTx, ...prev]);
-    } else {
-      setTransactions((prev) => prev.map((t) => (t.id === savedTx.id ? savedTx : t)));
-    }
-
+  const handleModalSuccess = async (_savedTx: Transaction, message: string) => {
+    await fetchTransactionsAjax(activeUser.id, filter);
     setToastMessage(message);
     setTimeout(() => {
       setToastMessage(null);
@@ -198,19 +279,26 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A]">
-      {/* Top Navbar Terintegrasi (Dev 1 Auth + Dev 2 Switcher) */}
+      {/* Top Navbar Terintegrasi */}
       <header className="bg-white border-b border-[#E2E8F0] sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-[6px] bg-[#2563EB] flex items-center justify-center text-white font-bold text-base">
-              D
-            </div>
-            <div>
-              <h1 className="text-lg font-semibold text-[#0F172A] leading-tight">
-                DUIT<span className="text-[#2563EB]">ku</span>
-              </h1>
-              <p className="text-[11px] text-[#64748B]">Expense Tracker Mahasiswa</p>
-            </div>
+          <div className="flex items-center gap-6">
+            <Link href="/" className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-[6px] bg-[#2563EB] flex items-center justify-center text-white font-bold text-base">
+                D
+              </div>
+              <div>
+                <h1 className="text-base font-semibold text-[#0F172A] leading-tight">
+                  DUIT<span className="text-[#2563EB]">ku</span>
+                </h1>
+                <p className="text-[10px] text-[#64748B]">Expense Tracker Mahasiswa</p>
+              </div>
+            </Link>
+            <nav className="hidden sm:flex items-center gap-4 text-xs font-medium text-[#64748B]">
+              <Link href="/dashboard" className="text-[#2563EB] font-semibold">
+                Dashboard Transaksi
+              </Link>
+            </nav>
           </div>
 
           {/* Area Info Pengguna, Pengujian User Switcher (SRS-05), & Logout (SRS-06) */}
@@ -290,7 +378,7 @@ export default function DashboardPage() {
         <section aria-label="Pemantauan Budget Bulanan">
           <BudgetMonitorCard
             budget={activeBudget}
-            transactions={userTransactions}
+            transactions={allUserTransactions}
             selectedMonth={selectedMonth}
             onMonthChange={setSelectedMonth}
             onOpenBudgetModal={(month) => {
@@ -301,25 +389,21 @@ export default function DashboardPage() {
           />
         </section>
 
-        {/* Baris Tindakan & Slot Dev 3 (Tambah Transaksi) */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-2">
-          <div>
-            <h2 className="text-xl font-semibold text-[#0F172A]">Daftar Transaksi</h2>
-            <p className="text-xs text-[#64748B]">
-              Menampilkan data transaksi keuangan milik {activeUser.name}
-            </p>
-          </div>
+        {/* 3. Header, Tombol Tambah Transaksi (SRS-08), & Filter Transaksi via AJAX (SRS-11) */}
+        <section aria-label="Filter Transaksi">
+          <TransactionFilter
+            currentFilter={filter}
+            onFilterChange={handleFilterChange}
+            onResetFilter={handleResetFilter}
+            onAddClick={handleOpenAddModal}
+            isLoading={isFilterLoading}
+          />
+        </section>
 
-          {/* Slot Integrasi untuk Developer 3 (SRS-08 Tambah Transaksi) */}
-          <div id="dev3-add-transaction-slot" className="flex items-center gap-2">
-            <AddTransactionButton onClick={handleOpenAddModal} />
-          </div>
-        </div>
-
-        {/* 3. Tabel Riwayat Transaksi (SRS-03, SRS-05, SRS-09 Edit, SRS-10 Hapus) */}
+        {/* 4. Tabel Riwayat Transaksi (SRS-03, SRS-05, SRS-09 Edit, SRS-10 Hapus) */}
         <section aria-label="Tabel Riwayat Transaksi">
           <TransactionTable
-            transactions={userTransactions}
+            transactions={transactions}
             formatPreference={formatPreference}
             onEdit={handleOpenEditModal}
             onDelete={handleOpenDeleteModal}

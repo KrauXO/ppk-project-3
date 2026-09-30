@@ -54,7 +54,7 @@ export default function RegisterPage() {
       }
 
       // Auto-login flow as permitted in PRD Section 9
-      router.push('/');
+      router.push('/dashboard');
       router.refresh();
     } catch {
       setError('Terjadi kesalahan koneksi. Silakan coba lagi.');
