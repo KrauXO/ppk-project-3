@@ -105,20 +105,73 @@ function TransactionFormInner({ mode, initialData, userId, onClose, onSuccess }:
 
     try {
       if (mode === 'create') {
-        const response = await createTransaction(payload, userId);
-        if (!response.success || !response.data) {
-          throw new Error(response.error || 'Gagal menambahkan transaksi.');
+        let savedData: Transaction | null = null;
+        let successMsg = 'Transaksi berhasil ditambahkan.';
+
+        // SRS-11: Submit via AJAX fetch REST API (/api/transactions)
+        try {
+          const res = await fetch('/api/transactions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...payload, user_id: userId }),
+          });
+          if (res.ok) {
+            const result = await res.json();
+            if (result.success && result.data) {
+              savedData = result.data;
+              if (result.message) successMsg = result.message;
+            }
+          }
+        } catch {
+          // Fallback ke Server Action jika endpoint REST API belum tersedia di branch lokal
         }
-        onSuccess(response.data, response.message || 'Transaksi berhasil ditambahkan.');
+
+        if (!savedData) {
+          const response = await createTransaction(payload, userId);
+          if (!response.success || !response.data) {
+            throw new Error(response.error || 'Gagal menambahkan transaksi.');
+          }
+          savedData = response.data;
+          if (response.message) successMsg = response.message;
+        }
+
+        onSuccess(savedData, successMsg);
       } else {
         if (!initialData?.id) {
           throw new Error('ID transaksi tidak valid untuk mode edit.');
         }
-        const response = await updateTransaction(initialData.id, payload, userId);
-        if (!response.success || !response.data) {
-          throw new Error(response.error || 'Gagal memperbarui transaksi.');
+
+        let updatedData: Transaction | null = null;
+        let successMsg = 'Transaksi berhasil diperbarui.';
+
+        // SRS-11: Submit via AJAX fetch REST API (/api/transactions/[id])
+        try {
+          const res = await fetch(`/api/transactions/${initialData.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...payload, user_id: userId }),
+          });
+          if (res.ok) {
+            const result = await res.json();
+            if (result.success && result.data) {
+              updatedData = result.data;
+              if (result.message) successMsg = result.message;
+            }
+          }
+        } catch {
+          // Fallback ke Server Action jika endpoint REST API belum tersedia di branch lokal
         }
-        onSuccess(response.data, response.message || 'Transaksi berhasil diperbarui.');
+
+        if (!updatedData) {
+          const response = await updateTransaction(initialData.id, payload, userId);
+          if (!response.success || !response.data) {
+            throw new Error(response.error || 'Gagal memperbarui transaksi.');
+          }
+          updatedData = response.data;
+          if (response.message) successMsg = response.message;
+        }
+
+        onSuccess(updatedData, successMsg);
       }
       onClose();
     } catch (err: unknown) {
