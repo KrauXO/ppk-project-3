@@ -3,7 +3,7 @@
  * Menguji fungsionalitas SRS-08, SRS-09, SRS-10, validasi input, dan data isolation
  */
 
-import { DUMMY_USERS, INITIAL_TRANSACTIONS } from '../lib/dummy-data.js';
+import { DUMMY_USERS, INITIAL_TRANSACTIONS } from '../lib/dummy-data.ts';
 
 console.log('=== MEMULAI TEST VERIFIKASI DEVELOPER 3 ===\n');
 

@@ -1,6 +1,7 @@
 'use server';
 
 import { Transaction, TransactionFormData } from '@/types/transaction';
+import { DUMMY_TRANSACTIONS } from '@/lib/dummy-data';
 import { sql } from '@/lib/db';
 
 export interface ActionResponse<T = unknown> {
@@ -8,6 +9,72 @@ export interface ActionResponse<T = unknown> {
   message?: string;
   data?: T;
   error?: string;
+}
+
+let memoryTransactions: Transaction[] = [...DUMMY_TRANSACTIONS];
+let txDbInitialized = false;
+
+async function ensureTransactionsDbInitialized(): Promise<boolean> {
+  if (txDbInitialized) return true;
+  try {
+    const dbUrl = process.env.DATABASE_URL || '';
+    if (!dbUrl || dbUrl.includes('user:password@host/dbname')) return false;
+
+    await sql`
+      CREATE TABLE IF NOT EXISTS transactions (
+        id VARCHAR(50) PRIMARY KEY,
+        user_id VARCHAR(50) NOT NULL,
+        type VARCHAR(20) NOT NULL,
+        category VARCHAR(100) NOT NULL,
+        amount NUMERIC NOT NULL,
+        description TEXT DEFAULT '',
+        date VARCHAR(20) NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+    `;
+
+    const existing = await sql`SELECT COUNT(*)::int as count FROM transactions;`;
+    if (existing[0]?.count === 0) {
+      for (const t of DUMMY_TRANSACTIONS) {
+        await sql`
+          INSERT INTO transactions (id, user_id, type, category, amount, description, date, created_at)
+          VALUES (${t.id}, ${t.user_id}, ${t.type}, ${t.category}, ${t.amount}, ${t.description}, ${t.date}, ${t.created_at})
+          ON CONFLICT (id) DO NOTHING;
+        `;
+      }
+    }
+
+    txDbInitialized = true;
+    return true;
+  } catch (err) {
+    console.warn('Peringatan: Database transaksi belum terjangkau, menggunakan fallback in-memory:', err);
+    return false;
+  }
+}
+
+export async function getTransactions(): Promise<Transaction[]> {
+  if (await ensureTransactionsDbInitialized()) {
+    try {
+      const rows = await sql`
+        SELECT id, user_id, type, category, amount, description, date, created_at
+        FROM transactions
+        ORDER BY date DESC, created_at DESC;
+      `;
+      return rows.map((row) => ({
+        id: String(row.id),
+        user_id: String(row.user_id),
+        type: row.type as 'income' | 'expense',
+        category: String(row.category),
+        amount: Number(row.amount),
+        description: String(row.description || ''),
+        date: String(row.date).slice(0, 10),
+        created_at: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
+      }));
+    } catch {
+      // Fallback ke memoryTransactions
+    }
+  }
+  return memoryTransactions;
 }
 
 /**
@@ -63,19 +130,17 @@ export async function createTransaction(
     const dateStr = formData.date;
 
     // Coba simpan ke Neon PostgreSQL jika database sudah siap
-    try {
-      const result = await sql`
-        INSERT INTO transactions (id, user_id, type, category, amount, description, date, created_at)
-        VALUES (${newId}, ${userId}, ${formData.type}, ${cleanCategory}, ${numAmount}, ${cleanDesc}, ${dateStr}, NOW())
-        RETURNING id, user_id, type, category, amount, description, date, created_at;
-      `;
+    if (await ensureTransactionsDbInitialized()) {
+      try {
+        const result = await sql`
+          INSERT INTO transactions (id, user_id, type, category, amount, description, date, created_at)
+          VALUES (${newId}, ${userId}, ${formData.type}, ${cleanCategory}, ${numAmount}, ${cleanDesc}, ${dateStr}, NOW())
+          RETURNING id, user_id, type, category, amount, description, date, created_at;
+        `;
 
-      if (result && result.length > 0) {
-        const row = result[0];
-        return {
-          success: true,
-          message: 'Transaksi berhasil ditambahkan.',
-          data: {
+        if (result && result.length > 0) {
+          const row = result[0];
+          const saved: Transaction = {
             id: String(row.id),
             user_id: String(row.user_id),
             type: row.type as 'income' | 'expense',
@@ -84,11 +149,17 @@ export async function createTransaction(
             description: String(row.description || ''),
             date: String(row.date).slice(0, 10),
             created_at: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
-          },
-        };
+          };
+          memoryTransactions = [saved, ...memoryTransactions];
+          return {
+            success: true,
+            message: 'Transaksi berhasil ditambahkan.',
+            data: saved,
+          };
+        }
+      } catch (dbError) {
+        console.warn('Peringatan: Tidak dapat terhubung ke database Neon (menggunakan fallback in-memory):', dbError);
       }
-    } catch (dbError) {
-      console.warn('Peringatan: Tidak dapat terhubung ke database Neon (menggunakan fallback in-memory):', dbError);
     }
 
     // Fallback: Mengembalikan objek transaksi yang valid untuk lingkungan pengujian/offline
@@ -102,6 +173,7 @@ export async function createTransaction(
       date: dateStr,
       created_at: new Date().toISOString(),
     };
+    memoryTransactions = [fallbackTransaction, ...memoryTransactions];
 
     return {
       success: true,
@@ -143,24 +215,22 @@ export async function updateTransaction(
     const dateStr = formData.date;
 
     // Coba update ke Neon PostgreSQL
-    try {
-      const result = await sql`
-        UPDATE transactions
-        SET type = ${formData.type},
-            category = ${cleanCategory},
-            amount = ${numAmount},
-            description = ${cleanDesc},
-            date = ${dateStr}
-        WHERE id = ${id} AND user_id = ${userId}
-        RETURNING id, user_id, type, category, amount, description, date, created_at;
-      `;
+    if (await ensureTransactionsDbInitialized()) {
+      try {
+        const result = await sql`
+          UPDATE transactions
+          SET type = ${formData.type},
+              category = ${cleanCategory},
+              amount = ${numAmount},
+              description = ${cleanDesc},
+              date = ${dateStr}
+          WHERE id = ${id} AND user_id = ${userId}
+          RETURNING id, user_id, type, category, amount, description, date, created_at;
+        `;
 
-      if (result && result.length > 0) {
-        const row = result[0];
-        return {
-          success: true,
-          message: 'Transaksi berhasil diperbarui.',
-          data: {
+        if (result && result.length > 0) {
+          const row = result[0];
+          const updated: Transaction = {
             id: String(row.id),
             user_id: String(row.user_id),
             type: row.type as 'income' | 'expense',
@@ -169,11 +239,17 @@ export async function updateTransaction(
             description: String(row.description || ''),
             date: String(row.date).slice(0, 10),
             created_at: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
-          },
-        };
+          };
+          memoryTransactions = memoryTransactions.map((t) => (t.id === id ? updated : t));
+          return {
+            success: true,
+            message: 'Transaksi berhasil diperbarui.',
+            data: updated,
+          };
+        }
+      } catch (dbError) {
+        console.warn('Peringatan: Tidak dapat terhubung ke database Neon (menggunakan fallback in-memory):', dbError);
       }
-    } catch (dbError) {
-      console.warn('Peringatan: Tidak dapat terhubung ke database Neon (menggunakan fallback in-memory):', dbError);
     }
 
     // Fallback: Mengembalikan objek transaksi yang sudah diperbarui
@@ -187,6 +263,7 @@ export async function updateTransaction(
       date: dateStr,
       created_at: new Date().toISOString(),
     };
+    memoryTransactions = memoryTransactions.map((t) => (t.id === id && t.user_id === userId ? updatedTransaction : t));
 
     return {
       success: true,
@@ -217,14 +294,18 @@ export async function deleteTransaction(
     }
 
     // Coba hapus dari Neon PostgreSQL
-    try {
-      await sql`
-        DELETE FROM transactions
-        WHERE id = ${id} AND user_id = ${userId};
-      `;
-    } catch (dbError) {
-      console.warn('Peringatan: Tidak dapat terhubung ke database Neon (menggunakan fallback in-memory):', dbError);
+    if (await ensureTransactionsDbInitialized()) {
+      try {
+        await sql`
+          DELETE FROM transactions
+          WHERE id = ${id} AND user_id = ${userId};
+        `;
+      } catch (dbError) {
+        console.warn('Peringatan: Tidak dapat terhubung ke database Neon (menggunakan fallback in-memory):', dbError);
+      }
     }
+
+    memoryTransactions = memoryTransactions.filter((t) => !(t.id === id && t.user_id === userId));
 
     return {
       success: true,
