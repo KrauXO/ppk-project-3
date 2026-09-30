@@ -5,10 +5,12 @@ import { useRouter } from 'next/navigation';
 import {
   DUMMY_USERS,
   DUMMY_TRANSACTIONS,
+  DUMMY_BUDGETS,
   getTransactionsByUserId,
   calculateFinancialSummary,
   User,
   Transaction,
+  MonthlyBudget,
 } from '@/lib/dummy-data';
 import {
   useBalanceFormatPreference,
@@ -16,6 +18,7 @@ import {
 import SummaryCards from '@/components/dashboard/SummaryCards';
 import TransactionTable from '@/components/dashboard/TransactionTable';
 import { TransactionModal, AddTransactionButton, DeleteConfirmModal } from '@/components/transactions';
+import { BudgetMonitorCard, BudgetModal } from '@/components/budget';
 import { deleteTransaction, getTransactions } from '@/app/actions/transactions';
 import { TransactionModalMode } from '@/types/transaction';
 
@@ -33,6 +36,11 @@ export default function DashboardPage() {
 
   // Transaksi state reaktif (mendukung Tambah, Edit, Hapus dari Dev 3)
   const [transactions, setTransactions] = useState<Transaction[]>(DUMMY_TRANSACTIONS);
+
+  // State Budget Bulanan (SRS-12, SRS-13, SRS-14)
+  const [budgets, setBudgets] = useState<MonthlyBudget[]>(DUMMY_BUDGETS);
+  const [selectedMonth, setSelectedMonth] = useState<string>('2025-02');
+  const [isBudgetModalOpen, setIsBudgetModalOpen] = useState<boolean>(false);
 
   // Sinkronisasi session login (Dev 1) & data transaksi dari DB/server
   useEffect(() => {
@@ -60,6 +68,21 @@ export default function DashboardPage() {
       })
       .catch(() => {});
   }, []);
+
+  // Sinkronisasi data budget user aktif via AJAX GET /api/budgets (SRS-11, SRS-14)
+  useEffect(() => {
+    fetch(`/api/budgets?userId=${encodeURIComponent(activeUser.id)}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((result) => {
+        if (result?.success && Array.isArray(result.data)) {
+          setBudgets((prev) => {
+            const others = prev.filter((b) => b.user_id !== activeUser.id);
+            return [...others, ...result.data];
+          });
+        }
+      })
+      .catch(() => {});
+  }, [activeUser.id]);
 
   const handleLogout = async () => {
     setIsLoggingOut(true);
@@ -90,6 +113,10 @@ export default function DashboardPage() {
 
   // Hitung ringkasan keuangan berdasarkan data transaksi user aktif (SRS-04)
   const summary = calculateFinancialSummary(userTransactions);
+
+  // Cari budget aktif untuk user & bulan terpilih (SRS-13, SRS-14)
+  const activeBudget =
+    budgets.find((b) => b.user_id === activeUser.id && b.month === selectedMonth) || null;
 
   // Trigger modal tambah transaksi (SRS-08)
   const handleOpenAddModal = () => {
@@ -143,6 +170,26 @@ export default function DashboardPage() {
       setTransactions((prev) => prev.map((t) => (t.id === savedTx.id ? savedTx : t)));
     }
 
+    setToastMessage(message);
+    setTimeout(() => {
+      setToastMessage(null);
+    }, 3500);
+  };
+
+  // Callback sukses dari BudgetModal (SRS-12)
+  const handleBudgetSuccess = (savedBudget: MonthlyBudget, message: string) => {
+    setBudgets((prev) => {
+      const idx = prev.findIndex(
+        (b) => b.user_id === savedBudget.user_id && b.month === savedBudget.month
+      );
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = savedBudget;
+        return next;
+      }
+      return [...prev, savedBudget];
+    });
+    setSelectedMonth(savedBudget.month);
     setToastMessage(message);
     setTimeout(() => {
       setToastMessage(null);
@@ -239,6 +286,21 @@ export default function DashboardPage() {
           />
         </section>
 
+        {/* 2. Panel Pemantauan Budget Bulanan (SRS-12, SRS-13, SRS-14) */}
+        <section aria-label="Pemantauan Budget Bulanan">
+          <BudgetMonitorCard
+            budget={activeBudget}
+            transactions={userTransactions}
+            selectedMonth={selectedMonth}
+            onMonthChange={setSelectedMonth}
+            onOpenBudgetModal={(month) => {
+              setSelectedMonth(month);
+              setIsBudgetModalOpen(true);
+            }}
+            formatPreference={formatPreference}
+          />
+        </section>
+
         {/* Baris Tindakan & Slot Dev 3 (Tambah Transaksi) */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-2">
           <div>
@@ -254,7 +316,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* 2. Tabel Riwayat Transaksi (SRS-03, SRS-05, SRS-09 Edit, SRS-10 Hapus) */}
+        {/* 3. Tabel Riwayat Transaksi (SRS-03, SRS-05, SRS-09 Edit, SRS-10 Hapus) */}
         <section aria-label="Tabel Riwayat Transaksi">
           <TransactionTable
             transactions={userTransactions}
@@ -273,6 +335,16 @@ export default function DashboardPage() {
         userId={activeUser.id}
         onClose={() => setIsModalOpen(false)}
         onSuccess={handleModalSuccess}
+      />
+
+      {/* Modal Atur / Ubah Budget Bulanan (SRS-12) */}
+      <BudgetModal
+        isOpen={isBudgetModalOpen}
+        userId={activeUser.id}
+        currentMonth={selectedMonth}
+        initialAmount={activeBudget?.amount ?? null}
+        onClose={() => setIsBudgetModalOpen(false)}
+        onSuccess={handleBudgetSuccess}
       />
 
       {/* Modal Konfirmasi Hapus Transaksi (SRS-10) */}
