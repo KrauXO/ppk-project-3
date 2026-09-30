@@ -21,10 +21,7 @@ export default function SummaryCards({
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 bg-white border border-[#E2E8F0] rounded-[6px] px-4 py-2.5">
         <div className="flex items-center gap-2">
           <span className="text-xs font-semibold text-[#64748B] uppercase tracking-wider">
-            Preferensi Tampilan (SRS-07)
-          </span>
-          <span className="text-xs text-[#64748B]">
-            — Disimpan di Cookie Browser
+            Preferensi Tampilan
           </span>
         </div>
         <div className="flex items-center gap-2 text-sm">

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Button } from './ui/Button';
 
@@ -30,11 +31,19 @@ export const Navbar: React.FC<NavbarProps> = ({ user }) => {
   return (
     <header className="w-full bg-white border-b border-[#E2E8F0]">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-        {/* Brand */}
-        <div className="flex items-center gap-2">
-          <span className="font-semibold text-lg text-[#0F172A] tracking-tight">
+        {/* Brand & Navigation */}
+        <div className="flex items-center gap-6">
+          <Link href="/" className="font-semibold text-lg text-[#0F172A] tracking-tight">
             DUIT<span className="text-[#2563EB]">ku</span>
-          </span>
+          </Link>
+          <nav className="flex items-center gap-4 text-xs font-medium text-[#64748B]">
+            <Link href="/" className="hover:text-[#2563EB] transition-colors">
+              Beranda
+            </Link>
+            <Link href="/dashboard" className="hover:text-[#2563EB] transition-colors">
+              Dashboard Transaksi
+            </Link>
+          </nav>
         </div>
 
         {/* User Info & Logout */}
