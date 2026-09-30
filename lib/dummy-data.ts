@@ -154,3 +154,41 @@ export function calculateFinancialSummary(transactions: Transaction[]): Financia
     totalExpense,
   };
 }
+
+export interface MonthlyBudget {
+  id: string;
+  user_id: string;
+  month: string;
+  amount: number;
+  updated_at: string;
+}
+
+export const DUMMY_BUDGETS: MonthlyBudget[] = [
+  {
+    id: 'b1',
+    user_id: 'u1',
+    month: '2025-02',
+    amount: 500000,
+    updated_at: '2025-02-01T08:00:00Z',
+  },
+  {
+    id: 'b2',
+    user_id: 'u2',
+    month: '2025-02',
+    amount: 25000,
+    updated_at: '2025-02-01T08:00:00Z',
+  },
+];
+
+export const INITIAL_BUDGETS = DUMMY_BUDGETS;
+
+/**
+ * Filter budget bulanan berdasarkan user_id (SRS-14: Data Isolation)
+ */
+export function getBudgetsByUserId(
+  userId: string,
+  budgets: MonthlyBudget[] = DUMMY_BUDGETS
+): MonthlyBudget[] {
+  return budgets.filter((b) => b.user_id === userId);
+}
+
